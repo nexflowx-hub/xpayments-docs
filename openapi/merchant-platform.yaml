@@ -1,0 +1,324 @@
+openapi: 3.1.0
+info:
+  title: XPayments Merchant Platform API
+  version: 3.1.0
+  description: Merchant-authenticated management and observability API for Stores, developer credentials, transactions and wallets.
+servers:
+  - url: https://api.xpayments.digital/api/v1
+    description: Production
+tags:
+  - name: Authentication
+  - name: Stores
+  - name: API Keys
+  - name: Webhooks
+  - name: Transactions
+  - name: Wallets
+paths:
+  /auth/login:
+    post:
+      tags: [Authentication]
+      security: []
+      summary: Merchant login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email, password]
+              properties:
+                email: { type: string, format: email }
+                password: { type: string, format: password }
+      responses:
+        '200':
+          description: Authenticated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: object
+                    properties:
+                      token: { type: string }
+                      merchant:
+                        $ref: '#/components/schemas/MerchantSummary'
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /auth/me:
+    get:
+      tags: [Authentication]
+      summary: Current Merchant
+      security: [{ merchantJwt: [] }]
+      responses:
+        '200': { description: Current Merchant }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /merchant/stores:
+    get:
+      tags: [Stores]
+      summary: List Merchant Stores
+      security: [{ merchantJwt: [] }]
+      responses:
+        '200':
+          description: Store list
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Store' }
+    post:
+      tags: [Stores]
+      summary: Create Store in draft
+      security: [{ merchantJwt: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateStoreRequest' }
+      responses:
+        '201':
+          description: Store created in draft
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  data:
+                    allOf:
+                      - { $ref: '#/components/schemas/Store' }
+                      - type: object
+                        properties:
+                          webhookSecret:
+                            type: [string, 'null']
+                            description: Returned only when a webhook is created with the Store. Save server-side.
+                  message: { type: string }
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /merchant/stores/{storeId}:
+    get:
+      tags: [Stores]
+      summary: Retrieve Store details
+      security: [{ merchantJwt: [] }]
+      parameters:
+        - $ref: '#/components/parameters/StoreId'
+      responses:
+        '200': { description: Store details }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api-keys:
+    get:
+      tags: [API Keys]
+      summary: List Store-scoped API keys
+      security: [{ merchantJwt: [] }]
+      responses:
+        '200': { description: API key metadata/previews }
+    post:
+      tags: [API Keys]
+      summary: Create Store-scoped API key
+      security: [{ merchantJwt: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [storeId, name]
+              properties:
+                storeId: { type: string, format: uuid }
+                name: { type: string }
+                environment: { type: string, enum: [test, live], default: test }
+                scopes:
+                  type: array
+                  items: { type: string }
+                  default: [payments_write]
+      responses:
+        '201':
+          description: API key created; fullKey is returned at creation time
+        '400': { $ref: '#/components/responses/BadRequest' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api-keys/{apiKeyId}:
+    delete:
+      tags: [API Keys]
+      summary: Revoke API key
+      security: [{ merchantJwt: [] }]
+      parameters:
+        - name: apiKeyId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Revoked }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /webhooks:
+    get:
+      tags: [Webhooks]
+      summary: List Merchant webhook endpoints
+      security: [{ merchantJwt: [] }]
+      responses:
+        '200': { description: Webhook metadata; signing secret is not exposed in normal list }
+    post:
+      tags: [Webhooks]
+      summary: Create Merchant webhook endpoint
+      security: [{ merchantJwt: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [storeId, url]
+              properties:
+                storeId: { type: string, format: uuid }
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  items: { type: string }
+                  example: [payment_intent.succeeded, payment_intent.payment_failed, payment_intent.processing, payment_intent.canceled]
+      responses:
+        '201':
+          description: Webhook created; signing secret returned at creation
+        '400': { $ref: '#/components/responses/BadRequest' }
+  /webhooks/{webhookId}:
+    put:
+      tags: [Webhooks]
+      summary: Update Merchant webhook
+      security: [{ merchantJwt: [] }]
+      parameters:
+        - $ref: '#/components/parameters/WebhookId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                url: { type: string, format: uri }
+                events:
+                  type: array
+                  items: { type: string }
+                status: { type: string, enum: [active, paused, inactive, disabled] }
+      responses:
+        '200': { description: Updated }
+        '404': { $ref: '#/components/responses/NotFound' }
+    delete:
+      tags: [Webhooks]
+      summary: Delete Merchant webhook
+      security: [{ merchantJwt: [] }]
+      parameters:
+        - $ref: '#/components/parameters/WebhookId'
+      responses:
+        '200': { description: Deleted }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /transactions:
+    get:
+      tags: [Transactions]
+      summary: List Transactions
+      security: [{ merchantJwt: [] }]
+      parameters:
+        - { name: page, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: limit, in: query, schema: { type: integer, minimum: 1 } }
+        - { name: status, in: query, schema: { type: string } }
+        - { name: gateway, in: query, schema: { type: string } }
+        - { name: currency, in: query, schema: { type: string } }
+        - { name: reference, in: query, schema: { type: string } }
+      responses:
+        '200': { description: Paginated Transactions }
+  /transactions/stats:
+    get:
+      tags: [Transactions]
+      summary: Transaction statistics
+      security: [{ merchantJwt: [] }]
+      responses:
+        '200': { description: Aggregate transaction statistics }
+  /transactions/{transactionId}:
+    get:
+      tags: [Transactions]
+      summary: Retrieve Transaction
+      security: [{ merchantJwt: [] }]
+      parameters:
+        - name: transactionId
+          in: path
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200': { description: Transaction }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /wallets:
+    get:
+      tags: [Wallets]
+      summary: List Merchant wallets
+      security: [{ merchantJwt: [] }]
+      responses:
+        '200': { description: Wallets and summary }
+  /wallets/movements:
+    get:
+      tags: [Wallets]
+      summary: List wallet movements
+      security: [{ merchantJwt: [] }]
+      responses:
+        '200': { description: Wallet movements }
+components:
+  securitySchemes:
+    merchantJwt:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  parameters:
+    StoreId:
+      name: storeId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    WebhookId:
+      name: webhookId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    MerchantSummary:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+        email: { type: string, format: email }
+    CreateStoreRequest:
+      type: object
+      required: [name]
+      properties:
+        name: { type: string, minLength: 2, maxLength: 120 }
+        currency: { type: string, pattern: '^[A-Z]{3}$', default: EUR }
+        domain: { type: [string, 'null'] }
+        theme: { type: string, enum: [light, dark], default: light }
+        primaryColor: { type: string, pattern: '^#[0-9A-Fa-f]{6}$' }
+        logoUrl: { type: string, format: uri }
+        successUrl: { type: string, format: uri }
+        webhookUrl: { type: string, format: uri }
+    Store:
+      type: object
+      properties:
+        id: { type: string, format: uuid }
+        merchantId: { type: string, format: uuid }
+        storeCode: { type: string }
+        name: { type: string }
+        domain: { type: [string, 'null'] }
+        status: { type: string }
+        currency: { type: string }
+        logoUrl: { type: [string, 'null'] }
+        theme: { type: string }
+        primaryColor: { type: [string, 'null'] }
+        successUrl: { type: [string, 'null'] }
+        webhookUrl: { type: [string, 'null'] }
+        paymentMethods:
+          type: array
+          items: { type: string }
+        routingConfigured: { type: boolean }
+  responses:
+    Unauthorized:
+      description: Authentication failed
+    BadRequest:
+      description: Invalid request
+    NotFound:
+      description: Resource not found
