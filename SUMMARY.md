@@ -3,24 +3,51 @@
 * [XPayments Developer Documentation](README.md)
 * [Getting Started](getting-started.md)
 
-## Stripe-compatible Direct
+## Platform Concepts
 
-* [Stripe Direct Overview](guides/stripe-direct.md)
+* [Platform Overview](concepts/platform-overview.md)
+* [Stores & Onboarding](concepts/stores-and-onboarding.md)
+* [Environments & Credentials](concepts/environments-and-credentials.md)
+* [Routing & Orchestration](concepts/routing-and-orchestration.md)
+* [Payment Lifecycle](concepts/payment-lifecycle.md)
+
+## Developer Operations
+
+* [API Keys & Webhook Management](guides/api-keys-and-webhook-management.md)
 * [Merchant Webhooks](guides/webhooks.md)
 * [Idempotency & Errors](guides/idempotency-and-errors.md)
 
-## Native API
+## Integration Surfaces
 
+* [Native S2S](payment-methods/native-s2s-examples.md)
 * [PIX S2S](guides/pix.md)
 * [Checkout XPay](guides/checkout.md)
+* [Stripe-compatible Direct](guides/stripe-direct.md)
+* [Stripe Direct Payment Methods](payment-methods/stripe-direct-methods.md)
 
-## AI & Automation
+## Payment Methods
 
+* [Payment Methods Overview](payment-methods/overview.md)
+* [Native S2S Method Examples](payment-methods/native-s2s-examples.md)
+* [Stripe Direct Methods](payment-methods/stripe-direct-methods.md)
+
+## Examples
+
+* [Next.js + Stripe Direct](examples/nextjs-stripe-direct.md)
+* [PHP + Native S2S](examples/php-native-s2s.md)
 * [AI Integration Playbooks](guides/ai-integration.md)
 
 ## API Reference
 
-* [OpenAPI Specification](openapi/xpayments.yaml)
+* [API Reference Overview](reference/api-reference.md)
+* [Merchant Platform API](reference/merchant-platform-api.md)
+* [Payments OpenAPI](openapi/xpayments.yaml)
+* [Merchant Platform OpenAPI](openapi/merchant-platform.yaml)
+* [Versioning & Compatibility](reference/versioning.md)
+
+## Financial Operations
+
+* [Settlement, Releases & D0 Rails](operations/settlement-and-d0.md)
 
 ## Changelog
 
