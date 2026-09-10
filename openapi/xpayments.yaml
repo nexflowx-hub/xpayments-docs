@@ -1,0 +1,531 @@
+openapi: 3.1.0
+info:
+  title: XPayments API
+  version: 3.1.0
+  description: |
+    Public developer contract for XPayments Native S2S, Checkout XPay and
+    Stripe-compatible Direct PaymentIntent operations.
+
+    Financial finality is asynchronous. Merchants should finalize orders from
+    XPayments transaction state and verified merchant webhooks, not redirects
+    or browser callbacks.
+servers:
+  - url: https://api.xpayments.digital
+    description: Production API
+
+tags:
+  - name: System
+  - name: Native Payments
+  - name: Checkout
+  - name: Stripe-compatible Direct
+
+paths:
+  /api/health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: API health
+      security: []
+      responses:
+        '200':
+          description: XPayments API is online
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  version:
+                    type: string
+                  engine:
+                    type: string
+                  status:
+                    type: string
+              example:
+                success: true
+                version: 3.1.0
+                engine: XPayments
+                status: ONLINE
+
+  /api/v1/payments/charge:
+    post:
+      tags: [Native Payments]
+      operationId: createNativePayment
+      summary: Create a native XPayments payment
+      description: |
+        Creates a Store-scoped payment through the native XPayments surface.
+        Amount is supplied in minor units. Method-specific actions can be
+        returned for flows such as PIX.
+      security:
+        - bearerAuth: []
+        - xApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NativePaymentCreateRequest'
+            examples:
+              pix:
+                summary: Create R$5.00 PIX
+                value:
+                  amount: 500
+                  currency: BRL
+                  payment_method_types: [pix]
+                  reference: ORDER-12345
+                  customer:
+                    name: Customer Name
+                    document: '12345678900'
+                  metadata:
+                    order_id: ORDER-12345
+                    description: Order payment
+      responses:
+        '200':
+          description: Payment created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NativePaymentResponse'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/checkout/session:
+    post:
+      tags: [Checkout]
+      operationId: createCheckoutSession
+      summary: Create an XPay checkout session
+      description: |
+        Creates a Store-scoped Checkout XPay session. The hosted payment URL is
+        https://checkout.xpayments.digital/pay/{sessionId}. Redirect/return is
+        not financial finality.
+      security:
+        - bearerAuth: []
+        - xApiKey: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              additionalProperties: true
+              description: Checkout session fields depend on the enabled XPay contract for the Store.
+      responses:
+        '200':
+          description: Checkout session created
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: true
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/stripe/v1/payment_intents:
+    post:
+      tags: [Stripe-compatible Direct]
+      operationId: createPaymentIntent
+      summary: Create a Stripe-compatible PaymentIntent
+      description: |
+        Creates a provider PaymentIntent through the Store's active XPayments
+        Stripe route. XPayments creates and binds its Transaction before the
+        provider operation and injects nexflowx_transaction_id metadata.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - xApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/StripeVersion'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [amount, currency]
+              properties:
+                amount:
+                  type: integer
+                  minimum: 1
+                  description: Amount in minor units, for example 500 = EUR 5.00.
+                currency:
+                  type: string
+                  description: Lowercase payment currency. Must match the XPayments Store currency.
+                  examples: [eur]
+                payment_method_types[]:
+                  type: array
+                  items:
+                    type: string
+                  description: Optional explicit provider method list, such as card.
+                automatic_payment_methods[enabled]:
+                  oneOf:
+                    - type: boolean
+                    - type: string
+                      enum: ['true', 'false']
+                  description: Enable provider-selected eligible payment methods.
+                receipt_email:
+                  type: string
+                  format: email
+                metadata[merchant_reference]:
+                  type: string
+                  description: Merchant-facing payment/order reference.
+                metadata[order_id]:
+                  type: string
+                metadata[reference]:
+                  type: string
+              additionalProperties: true
+            examples:
+              automaticMethods:
+                summary: EUR 25.99 with automatic payment methods
+                value:
+                  amount: 2599
+                  currency: eur
+                  automatic_payment_methods[enabled]: 'true'
+                  metadata[merchant_reference]: ORDER-12345
+              cardOnly:
+                summary: Card only
+                value:
+                  amount: 2599
+                  currency: eur
+                  payment_method_types[]: [card]
+                  metadata[merchant_reference]: ORDER-12345
+      responses:
+        '200':
+          description: Stripe-compatible PaymentIntent
+          headers:
+            X-XPayments-Idempotent-Replay:
+              schema:
+                type: string
+              description: Present as true when XPayments returns an existing bound PaymentIntent for an idempotent replay.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripePaymentIntent'
+        '400':
+          $ref: '#/components/responses/StripeBadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '409':
+          description: Idempotency or configuration conflict
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripeErrorEnvelope'
+        '502':
+          description: Provider/upstream failure
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripeErrorEnvelope'
+
+  /api/stripe/v1/payment_intents/{paymentIntentId}:
+    get:
+      tags: [Stripe-compatible Direct]
+      operationId: getPaymentIntent
+      summary: Retrieve a Store-bound PaymentIntent
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - xApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/StripeVersion'
+      responses:
+        '200':
+          description: PaymentIntent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripePaymentIntent'
+        '404':
+          description: PaymentIntent is unknown or not bound to this Store
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripeErrorEnvelope'
+    post:
+      tags: [Stripe-compatible Direct]
+      operationId: updatePaymentIntent
+      summary: Update a Store-bound PaymentIntent
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - xApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/StripeVersion'
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Updated PaymentIntent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripePaymentIntent'
+        '404':
+          description: PaymentIntent is unknown or not bound to this Store
+
+  /api/stripe/v1/payment_intents/{paymentIntentId}/confirm:
+    post:
+      tags: [Stripe-compatible Direct]
+      operationId: confirmPaymentIntent
+      summary: Confirm a Store-bound PaymentIntent server-side
+      description: |
+        Server-side confirmation is supported for compatible provider methods.
+        Browser card flows should normally use Stripe.js / Payment Element.
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - xApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+        - $ref: '#/components/parameters/StripeVersion'
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: PaymentIntent confirmation response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripePaymentIntent'
+
+  /api/stripe/v1/payment_intents/{paymentIntentId}/cancel:
+    post:
+      tags: [Stripe-compatible Direct]
+      operationId: cancelPaymentIntent
+      summary: Cancel a Store-bound PaymentIntent
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - xApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Canceled PaymentIntent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripePaymentIntent'
+
+  /api/stripe/v1/payment_intents/{paymentIntentId}/capture:
+    post:
+      tags: [Stripe-compatible Direct]
+      operationId: capturePaymentIntent
+      summary: Capture a Store-bound PaymentIntent
+      security:
+        - basicAuth: []
+        - bearerAuth: []
+        - xApiKey: []
+      parameters:
+        - $ref: '#/components/parameters/PaymentIntentId'
+        - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: false
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              additionalProperties: true
+      responses:
+        '200':
+          description: Captured PaymentIntent
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/StripePaymentIntent'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: Store-scoped XPayments key, such as xp_test_* or xp_live_*.
+    basicAuth:
+      type: http
+      scheme: basic
+      description: Stripe-style HTTP Basic using xp_* as username and an empty password.
+    xApiKey:
+      type: apiKey
+      in: header
+      name: x-api-key
+      description: Store-scoped XPayments key.
+
+  parameters:
+    PaymentIntentId:
+      name: paymentIntentId
+      in: path
+      required: true
+      schema:
+        type: string
+        pattern: '^pi_'
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Stable key for the same logical payment attempt.
+    StripeVersion:
+      name: Stripe-Version
+      in: header
+      required: false
+      schema:
+        type: string
+      description: Forwarded to the configured Stripe provider connection when supplied.
+
+  schemas:
+    NativePaymentCreateRequest:
+      type: object
+      required: [amount, currency, payment_method_types, reference]
+      properties:
+        amount:
+          type: integer
+          minimum: 1
+          description: Amount in minor units.
+        currency:
+          type: string
+        payment_method_types:
+          type: array
+          minItems: 1
+          items:
+            type: string
+        reference:
+          type: string
+        customer:
+          type: object
+          additionalProperties: true
+          properties:
+            name:
+              type: string
+            document:
+              type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    NativePaymentResponse:
+      type: object
+      additionalProperties: true
+      properties:
+        success:
+          type: boolean
+        transactionId:
+          type: string
+          format: uuid
+        reference:
+          type: string
+        status:
+          type: string
+        method:
+          type: string
+        action:
+          type: object
+          additionalProperties: true
+
+    StripePaymentIntent:
+      type: object
+      additionalProperties: true
+      properties:
+        id:
+          type: string
+          pattern: '^pi_'
+        object:
+          type: string
+          const: payment_intent
+        amount:
+          type: integer
+        amount_received:
+          type: integer
+        currency:
+          type: string
+        status:
+          type: string
+        livemode:
+          type: boolean
+        client_secret:
+          type: [string, 'null']
+        payment_method_types:
+          type: array
+          items:
+            type: string
+        metadata:
+          type: object
+          additionalProperties: true
+          properties:
+            nexflowx_transaction_id:
+              type: string
+              format: uuid
+            merchant_reference:
+              type: string
+            xpayments_store_id:
+              type: string
+              format: uuid
+            xpayments_gateway_vault_id:
+              type: string
+              format: uuid
+            xpayments_surface:
+              type: string
+
+    StripeErrorEnvelope:
+      type: object
+      properties:
+        error:
+          type: object
+          additionalProperties: true
+          properties:
+            type:
+              type: string
+            code:
+              type: string
+            message:
+              type: string
+
+  responses:
+    BadRequest:
+      description: Invalid request
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
+    StripeBadRequest:
+      description: Stripe-compatible invalid request
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/StripeErrorEnvelope'
+    Unauthorized:
+      description: Missing or invalid Store API key
+      content:
+        application/json:
+          schema:
+            type: object
+            additionalProperties: true
