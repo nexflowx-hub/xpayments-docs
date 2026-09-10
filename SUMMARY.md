@@ -38,7 +38,9 @@
 ## API Reference
 
 * [API Reference Overview](reference/api-reference.md)
-* [Merchant Platform API](reference/merchant-platform-api.md)
+* [Payments API — Interactive Reference](reference/payments-api-reference.md)
+* [Merchant Platform — Interactive Reference](reference/merchant-api-reference.md)
+* [Merchant Platform API Guide](reference/merchant-platform-api.md)
 * [Versioning & Compatibility](reference/versioning.md)
 
 ## Financial Operations
