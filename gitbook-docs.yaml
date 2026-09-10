@@ -1,0 +1,13 @@
+$schema: https://api.gitbook.com/gitbook-docs.yaml
+
+site:
+  title: XPayments Developer Docs
+
+structure:
+  - type: space
+    key: xpayments-docs
+    title: XPayments Developer Docs
+    path: docs
+    default: true
+    content:
+      directory: ./
