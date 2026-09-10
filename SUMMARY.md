@@ -19,11 +19,9 @@
 
 ## Integration Surfaces
 
-* [Native S2S](payment-methods/native-s2s-examples.md)
 * [PIX S2S](guides/pix.md)
 * [Checkout XPay](guides/checkout.md)
 * [Stripe-compatible Direct](guides/stripe-direct.md)
-* [Stripe Direct Payment Methods](payment-methods/stripe-direct-methods.md)
 
 ## Payment Methods
 
@@ -41,8 +39,6 @@
 
 * [API Reference Overview](reference/api-reference.md)
 * [Merchant Platform API](reference/merchant-platform-api.md)
-* [Payments OpenAPI](openapi/xpayments.yaml)
-* [Merchant Platform OpenAPI](openapi/merchant-platform.yaml)
 * [Versioning & Compatibility](reference/versioning.md)
 
 ## Financial Operations
