@@ -14,7 +14,9 @@
 ## Developer Operations
 
 * [API Keys & Webhook Management](guides/api-keys-and-webhook-management.md)
+* [Developer Secret Management](guides/secret-management.md)
 * [Merchant Webhooks](guides/webhooks.md)
+* [Password Recovery](guides/password-recovery.md)
 * [Idempotency & Errors](guides/idempotency-and-errors.md)
 
 ## Integration Surfaces
